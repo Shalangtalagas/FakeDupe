@@ -1,0 +1,73 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Freeze system
+local frozenParts = {}
+local frozenParticles = {}
+local frozenAnimations = {}
+
+local function freezeWorld(enable)
+    local myCharacter = Players.LocalPlayer.Character
+    
+    if not myCharacter then
+        Players.LocalPlayer.CharacterAdded:Wait()
+        myCharacter = Players.LocalPlayer.Character
+    end
+
+    if enable then
+        -- Freeze physics (except my character)
+        for _, part in ipairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") and not part.Anchored then
+                if not part:IsDescendantOf(myCharacter) then
+                    frozenParts[part] = true
+                    part.Anchored = true
+                end
+            end
+        end
+
+        -- Freeze particles (except mine)
+        for _, emitter in ipairs(workspace:GetDescendants()) do
+            if emitter:IsA("ParticleEmitter") then
+                if not emitter:IsDescendantOf(myCharacter) then
+                    frozenParticles[emitter] = emitter.Enabled
+                    emitter.Enabled = false
+                end
+            end
+        end
+
+        -- Freeze other players' animations
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer and player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+                        frozenAnimations[track] = track.Speed
+                        track:AdjustSpeed(0)
+                    end
+                end
+            end
+        end
+    else
+        -- Unfreeze physics
+        for part in pairs(frozenParts) do
+            if part.Parent then part.Anchored = false end
+        end
+        
+        -- Unfreeze particles
+        for emitter, state in pairs(frozenParticles) do
+            if emitter.Parent then emitter.Enabled = state end
+        end
+        
+        -- Unfreeze animations
+        for track, speed in pairs(frozenAnimations) do
+            if track.Parent then track:AdjustSpeed(speed) end
+        end
+
+        frozenParts = {}
+        frozenParticles = {}
+        frozenAnimations = {}
+    end
+end
+
+-- Immediately freeze the world when executed
+freezeWorld(true)
