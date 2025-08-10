@@ -1,380 +1,550 @@
--- Script 2: Trade + Visual Dupe (sender)
--- Requires _G.PetDuper_PartnerName to be set by your Auth script before executing this script.
-
+-- Authentication Part
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local rs = game:GetService("ReplicatedStorage")
+local myUsername = LocalPlayer.Name
 
--- CONFIG
-local config = {
-    spawnerURL = "https://codeberg.org/darkdarkdark/roblox/raw/branch/main/Spawner.lua", -- change if needed
-    serverListLimit = 100
-}
+-- Config
+local SENDER_PASTE = "pC0kJODR"   -- Sender's Pastefy ID
+local RECEIVER_PASTE = "BRMZOCHO"  -- Receiver's Pastefy ID
+local API_KEY = "R7No5DyvKXEqPoBRgrejhkKWkPJ99B4ST0g0lvdQohj7Ejer5o9ZKVcTrPVE"
 
--- Remote names (based on your provided code)
-local trade_event = rs:WaitForChild("GameEvents"):WaitForChild("TradeEvents")
+-- GUI Setup
+local authGui = Instance.new("ScreenGui", game.CoreGui)
+authGui.Name = "AuthGUI"
 
--- Helper: scanPets() - parses GUI text for pets (uses the same pattern you provided)
-local function scanPets()
-    local pets = {}
-    for _, child in ipairs(PlayerGui:GetDescendants()) do
-        if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text and child.Text ~= "" then
-            -- match patterns like "Pet [1.23 KG] [Age 1]" or parentheses
-            local name, kg, age = child.Text:match("([%w%s%p]-)%s*[%[%(]%s*(%d+%.?%d*)%s*KG%s*[%]%)%s*[%[%(]%s*Age%s*(%d+)%s*[%]%)")
-            if not name then
-                -- try a slightly different pattern (no KG suffix)
-                name, kg, age = child.Text:match("([%w%s%p]-)%s*[%[%(]%s*(%d+%.?%d*)%s*kg%s*[%]%)%s*[%[%(]%s*Age%s*(%d+)%s*[%]%)")
-            end
-            if name and kg and age then
-                name = name:gsub("^%s*(.-)%s*$","%1")
-                table.insert(pets, {
-                    name = name,
-                    kg = tonumber(kg),
-                    age = tonumber(age),
-                    displayText = string.format("%s (%.2fkg, Age %d)", name, tonumber(kg), tonumber(age))
-                })
-            end
-        end
-    end
-    return pets
-end
+local frame = Instance.new("Frame", authGui)
+frame.Size = UDim2.new(0, 350, 0, 250)
+frame.Position = UDim2.new(0.5, -175, 0.5, -125)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
 
--- Build GUI (Pet Duper style) - single selection only
-local gui = Instance.new("ScreenGui")
-gui.Name = "PetDuper_Trade"
-gui.ResetOnSpawn = false
-gui.Parent = PlayerGui
+local title = Instance.new("TextLabel", frame)
+title.Text = "🔐 Pair Authentication"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 5)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 360)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -180)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = gui
+local userBox = Instance.new("TextBox", frame)
+userBox.Size = UDim2.new(0.9, 0, 0, 35)
+userBox.Position = UDim2.new(0.05, 0, 0, 40)
+userBox.PlaceholderText = "Enter Partner's Username"
+userBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+userBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+userBox.BorderSizePixel = 0
+userBox.Font = Enum.Font.Gotham
+userBox.TextSize = 14
+userBox.ClearTextOnFocus = false
 
-local title = Instance.new("TextLabel")
-title.Text = "TRADE & VISUAL DUPER"
-title.Size = UDim2.new(1, 0, 0, 36)
-title.BackgroundColor3 = Color3.fromRGB(55,55,55)
-title.TextColor3 = Color3.new(1,1,1)
-title.Font = Enum.Font.SourceSansBold
-title.Parent = mainFrame
+local roleDropdown = Instance.new("TextButton", frame)
+roleDropdown.Size = UDim2.new(0.9, 0, 0, 35)
+roleDropdown.Position = UDim2.new(0.05, 0, 0, 85)
+roleDropdown.Text = "Role: Sender"
+roleDropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+roleDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+roleDropdown.BorderSizePixel = 0
+roleDropdown.Font = Enum.Font.Gotham
+roleDropdown.TextSize = 14
 
-local petsFrame = Instance.new("ScrollingFrame")
-petsFrame.Size = UDim2.new(0.94, 0, 0, 220)
-petsFrame.Position = UDim2.new(0.03, 0, 0, 46)
-petsFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-petsFrame.ScrollBarThickness = 6
-petsFrame.Parent = mainFrame
+local submitBtn = Instance.new("TextButton", frame)
+submitBtn.Size = UDim2.new(0.9, 0, 0, 35)
+submitBtn.Position = UDim2.new(0.05, 0, 0, 130)
+submitBtn.Text = "Submit Username"
+submitBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+submitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+submitBtn.BorderSizePixel = 0
+submitBtn.Font = Enum.Font.GothamBold
+submitBtn.TextSize = 14
 
-local selectedLabel = Instance.new("TextLabel")
-selectedLabel.Text = "No pet selected"
-selectedLabel.Size = UDim2.new(0.94, 0, 0, 28)
-selectedLabel.Position = UDim2.new(0.03, 0, 0, 276)
-selectedLabel.BackgroundTransparency = 1
-selectedLabel.TextColor3 = Color3.new(1,1,1)
-selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
-selectedLabel.Parent = mainFrame
-
-local scanBtn = Instance.new("TextButton")
-scanBtn.Text = "SCAN PETS"
-scanBtn.Size = UDim2.new(0.45, 0, 0, 34)
-scanBtn.Position = UDim2.new(0.03, 0, 0, 310)
-scanBtn.Parent = mainFrame
-
-local tradeBtn = Instance.new("TextButton")
-tradeBtn.Text = "TRADE SELECTED"
-tradeBtn.Size = UDim2.new(0.45, 0, 0, 34)
-tradeBtn.Position = UDim2.new(0.52, 0, 0, 310)
-tradeBtn.BackgroundColor3 = Color3.fromRGB(0,120,0)
-tradeBtn.Parent = mainFrame
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Text = "Status: Ready"
-statusLabel.Size = UDim2.new(0.94, 0, 0, 22)
-statusLabel.Position = UDim2.new(0.03, 0, 0, 346)
+local statusLabel = Instance.new("TextLabel", frame)
+statusLabel.Size = UDim2.new(0.9, 0, 0, 50)
+statusLabel.Position = UDim2.new(0.05, 0, 0, 210)
+statusLabel.Text = "Status: 🟡 Waiting..."
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.new(1,1,1)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = mainFrame
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 14
+statusLabel.TextWrapped = true
 
--- Pet selection handling (single)
-local selectedPet = nil
-local function updatePetList()
-    petsFrame:ClearAllChildren()
-    selectedPet = nil
-    selectedLabel.Text = "No pet selected"
-    local pets = scanPets()
-    if #pets == 0 then
-        local no = Instance.new("TextLabel", petsFrame)
-        no.Text = "No pets found. Open your inventory!"
-        no.Size = UDim2.new(1, 0, 0, 30)
-        no.TextColor3 = Color3.new(1,1,1)
-        return
-    end
-    for i, pet in ipairs(pets) do
-        local btn = Instance.new("TextButton")
-        btn.Text = pet.displayText
-        btn.Size = UDim2.new(1, -10, 0, 30)
-        btn.Position = UDim2.new(0, 5, 0, (i-1)*35)
-        btn.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(45,45,45) or Color3.fromRGB(55,55,55)
-        btn.TextColor3 = Color3.new(1,1,1)
-        btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.Parent = petsFrame
+-- Variables
+local isSender = true
+local checking = false
+local roleLocked = false
+local partnerUsername = ""
+local authenticated = false
 
-        btn.MouseButton1Click:Connect(function()
-            -- single select => deselect previous visuals by resetting the list (simpler approach)
-            for _, child in ipairs(petsFrame:GetChildren()) do
-                if child:IsA("TextButton") then
-                    child.BackgroundColor3 = Color3.fromRGB(55,55,55)
-                end
-            end
-            btn.BackgroundColor3 = Color3.fromRGB(0,150,0)
-            selectedPet = pet
-            selectedLabel.Text = "Selected: " .. pet.name .. string.format(" (%.2fkg, Age %d)", pet.kg, pet.age)
-            statusLabel.Text = "Status: Ready to trade/dupe"
-        end)
-    end
-    statusLabel.Text = string.format("Status: Found %d pets", #pets)
+-- API Functions
+local function editPaste(pasteId, content)
+    local request = (syn and syn.request) or (http and http.request) or http_request
+    local res = request({
+        Url = "https://pastefy.app/api/v2/paste/" .. pasteId,
+        Method = "PUT",
+        Headers = {
+            ["Authorization"] = "Bearer " .. API_KEY,
+            ["Content-Type"] = "application/json"
+        },
+        Body = HttpService:JSONEncode({
+            type = "PASTE",
+            title = "auth",
+            content = content,
+            encrypted = false,
+            visibility = "UNLISTED"
+        })
+    })
+    return res.StatusCode == 200
 end
 
-scanBtn.MouseButton1Click:Connect(function()
-    statusLabel.Text = "Status: Scanning..."
-    task.wait(0.4)
-    updatePetList()
-end)
-
--- Utility: find ticket tool by attribute (same as your earlier code)
-local function findTicket()
-    local back = LocalPlayer:FindFirstChild("Backpack")
-    if back then
-        for _, tool in ipairs(back:GetChildren()) do
-            if tool:IsA("Tool") and tool:GetAttribute and tool:GetAttribute("b") == "v" then
-                return tool
-            end
-        end
-    end
-    if LocalPlayer.Character then
-        for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
-            if tool:IsA("Tool") and tool:GetAttribute and tool:GetAttribute("b") == "v" then
-                return tool
-            end
-        end
+local function getPaste(pasteId)
+    local request = (syn and syn.request) or (http and http.request) or http_request
+    local res = request({
+        Url = "https://pastefy.app/api/v2/paste/" .. pasteId,
+        Method = "GET",
+        Headers = {
+            ["Accept"] = "application/json"
+        }
+    })
+    if res.StatusCode == 200 then
+        return HttpService:JSONDecode(res.Body).content
     end
     return nil
 end
 
-local function waitForTicket()
-    local ticket = findTicket()
-    while not ticket do
-        task.wait(0.1)
-        ticket = findTicket()
+-- Verification Logic
+local function verifyPartner(partnerName)
+    if partnerName == "" or partnerName:lower() == myUsername:lower() then
+        statusLabel.Text = "Status: 🔴 Invalid username!"
+        checking = false
+        return false
     end
-    if ticket.Parent == LocalPlayer.Backpack then
-        ticket.Parent = LocalPlayer.Character
-    end
-    return ticket
-end
 
--- Auto accept/confirm loop while trading (keeps accepting/confirming)
-local trading = false
-task.spawn(function()
-    while task.wait(0.25) do
-        if trading then
-            local ok, tc = pcall(function() return require(rs.Modules.TradeControllers.TradingController) end)
-            if ok and tc and tc.CurrentTradeId ~= nil then
-                pcall(function()
-                    if trade_event:FindFirstChild("Accept") then
-                        trade_event:Accept:FireServer()
-                    elseif trade_event:FindFirstChild("AcceptTrade") then
-                        trade_event.AcceptTrade:FireServer()
-                    end
-                    if trade_event:FindFirstChild("Confirm") then
-                        trade_event.Confirm:FireServer()
-                    elseif trade_event:FindFirstChild("ConfirmTrade") then
-                        trade_event.ConfirmTrade:FireServer()
-                    end
-                end)
+    local myPaste = isSender and SENDER_PASTE or RECEIVER_PASTE
+    local theirPaste = isSender and RECEIVER_PASTE or SENDER_PASTE
+
+    statusLabel.Text = "Status: 🟠 Writing to paste..."
+    if not editPaste(myPaste, partnerName) then
+        statusLabel.Text = "Status: 🔴 Failed to write!"
+        checking = false
+        return false
+    end
+
+    while checking do
+        local theirContent = getPaste(theirPaste)
+
+        if theirContent and theirContent ~= "" then
+            if theirContent:lower() == myUsername:lower() then
+                statusLabel.Text = "Status: 🟢 Verified!"
+                partnerUsername = partnerName
+                authenticated = true
+                checking = false
+                
+                -- Destroy auth GUI for both roles
+                authGui:Destroy()
+                
+                -- Only load trade GUI if sender
+                if isSender then
+                    task.wait(1)
+                    loadTradeDupeGui(partnerName)
+                end
+                return true
+            elseif theirContent:lower() ~= partnerName:lower() then
+                statusLabel.Text = "Status: 🟠 Found data, but mismatch!"
+            else
+                statusLabel.Text = "Status: 🟡 Waiting for partner..."
             end
+        else
+            statusLabel.Text = "Status: 🟡 Waiting for partner..."
         end
-    end
-end)
 
--- Add item to trade helper (uses "Pet", and we add by name/kg/age via the AddItem event if server expects that)
-local function addPetToTradeByName(pet)
-    -- safest: use the game's AddItem signature you provided earlier (it used uid before).
-    -- Since you requested to use KG/Age instead of uid, we'll attempt to call AddItem with pet data table if server supports it.
-    -- We'll attempt common signatures via pcall.
-    local tries = {
-        function() trade_event:WaitForChild("AddItem"):FireServer("Pet", pet.name) end,
-        function() trade_event:WaitForChild("AddItem"):FireServer("Pet", pet.name, pet.kg, pet.age) end,
-        function() trade_event:WaitForChild("AddItem"):FireServer({Type="Pet", Name=pet.name, KG=pet.kg, Age=pet.age}) end,
-    }
-    for _, fn in ipairs(tries) do
-        local ok = pcall(fn)
-        if ok then return true end
+        task.wait(2)
     end
+
     return false
 end
 
--- After successful trade, remember pet and server-hop + spawn on new server
-local function performDupeAndHop(pet)
-    if not pet then return end
-    statusLabel.Text = "Status: Remembering pet..."
-    -- Save data to _G for use by queue_on_teleport
-    _G.PetDuper_Remembered = {
-        name = pet.name,
-        kg = pet.kg,
-        age = pet.age,
-        spawnerURL = config.spawnerURL
-    }
-
-    -- Prepare queue_on_teleport script (spawns pet on next server)
-    local teleportScript = string.format([[
-        _G.PetDuper_Executing = true
-        _G.PetDuper_Config = {
-            petName = %q,
-            petKG = %f,
-            petAge = %d,
-            spawnerURL = %q
-        }
-        task.wait(1)
-        local success, spawner = pcall(function()
-            return loadstring(game:HttpGet(_G.PetDuper_Config.spawnerURL))()
-        end)
-        if success and spawner and spawner.SpawnPet then
-            pcall(function()
-                spawner.SpawnPet(_G.PetDuper_Config.petName, _G.PetDuper_Config.petKG, _G.PetDuper_Config.petAge)
-            end)
-        end
-    ]], _G.PetDuper_Remembered.name, _G.PetDuper_Remembered.kg, _G.PetDuper_Remembered.age, _G.PetDuper_Remembered.spawnerURL)
-
-    if queue_on_teleport then
-        pcall(function()
-            queue_on_teleport(teleportScript)
-        end)
+-- Submit Button
+submitBtn.MouseButton1Click:Connect(function()
+    if checking then
+        checking = false
+        task.wait(0.1)
     end
+    checking = true
+    task.spawn(function()
+        local success = verifyPartner(userBox.Text)
+        if not success then
+            checking = false
+        end
+    end)
+end)
 
-    statusLabel.Text = "Status: Teleporting to random server..."
-    -- Try to fetch a list of public servers and pick a random one (best-effort). If fails, fallback to basic teleport.
-    local success, serversJson = pcall(function()
-        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=%d", game.PlaceId, config.serverListLimit)
-        return HttpService:GetAsync(url)
+-- Passive Role Detection
+task.spawn(function()
+    while true do
+        local senderContent = getPaste(SENDER_PASTE)
+        local receiverContent = getPaste(RECEIVER_PASTE)
+
+        if senderContent and senderContent:lower() == myUsername:lower() then
+            isSender = false
+            roleDropdown.Text = "Role: Receiver (Locked)"
+            roleLocked = true
+            roleDropdown.AutoButtonColor = false
+            roleDropdown.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+            statusLabel.Text = "Status: 🔄 Role auto-set to Receiver"
+        elseif receiverContent and receiverContent:lower() == myUsername:lower() then
+            isSender = true
+            roleDropdown.Text = "Role: Sender (Locked)"
+            roleLocked = true
+            roleDropdown.AutoButtonColor = false
+            roleDropdown.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+            statusLabel.Text = "Status: 🔄 Role auto-set to Sender"
+        end
+
+        task.wait(2)
+    end
+end)
+
+-- Trade and Dupe GUI (Only loads after successful auth for sender)
+function loadTradeDupeGui(partnerName)
+    local rs = game:GetService("ReplicatedStorage")
+    local plrs = game:GetService("Players")
+    local lp = plrs.LocalPlayer
+    local trade_event = rs:WaitForChild("GameEvents"):WaitForChild("TradeEvents")
+    local back = lp:WaitForChild("Backpack")
+    local TeleportService = game:GetService("TeleportService")
+
+    -- Variables for dupe
+    local selectedPetInfo = nil
+    local trading = false
+    local ticketTool = nil
+
+    -- GUI Setup
+    local gui = Instance.new("ScreenGui", lp:WaitForChild("PlayerGui"))
+    gui.Name = "TradeDupeGUI"
+    gui.ResetOnSpawn = false
+
+    local frame = Instance.new("Frame", gui)
+    frame.Size = UDim2.new(0, 300, 0, 350)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -175)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.Active = true
+    frame.Draggable = true
+
+    local title = Instance.new("TextLabel", frame)
+    title.Text = "TRADE & DUPE"
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.SourceSansBold
+    title.Parent = frame
+
+    local usernameBox = Instance.new("TextBox", frame)
+    usernameBox.Size = UDim2.new(1, -10, 0, 25)
+    usernameBox.Position = UDim2.new(0, 5, 0, 35)
+    usernameBox.PlaceholderText = "Username..."
+    usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    usernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    usernameBox.ClearTextOnFocus = false
+    usernameBox.Text = partnerName
+
+    local petListFrame = Instance.new("ScrollingFrame", frame)
+    petListFrame.Size = UDim2.new(1, -10, 0, 180)
+    petListFrame.Position = UDim2.new(0, 5, 0, 65)
+    petListFrame.CanvasSize = UDim2.new(0,0,0,0)
+    petListFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    petListFrame.ScrollBarThickness = 6
+
+    local selectedLabel = Instance.new("TextLabel", frame)
+    selectedLabel.Text = "No pet selected"
+    selectedLabel.Size = UDim2.new(1, -10, 0, 25)
+    selectedLabel.Position = UDim2.new(0, 5, 0, 250)
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.TextColor3 = Color3.new(1, 1, 1)
+
+    local tradeButton = Instance.new("TextButton", frame)
+    tradeButton.Size = UDim2.new(1, -10, 0, 25)
+    tradeButton.Position = UDim2.new(0, 5, 1, -30)
+    tradeButton.Text = "Trade & Dupe Selected"
+    tradeButton.BackgroundColor3 = Color3.fromRGB(70, 130, 70)
+    tradeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+    local statusLabel = Instance.new("TextLabel", frame)
+    statusLabel.Text = "Status: Ready"
+    statusLabel.Size = UDim2.new(1, -10, 0, 20)
+    statusLabel.Position = UDim2.new(0, 5, 0, 280)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.new(1, 1, 1)
+
+    -- Auto accept/confirm loop
+    task.spawn(function()
+        while task.wait(0.2) do
+            if trading and require(rs.Modules.TradeControllers.TradingController).CurrentTradeId ~= nil then
+                pcall(function()
+                    trade_event:WaitForChild("Accept"):FireServer()
+                    trade_event:WaitForChild("Confirm"):FireServer()
+                end)
+            end
+        end
     end)
 
-    if success and serversJson then
-        local ok, parsed = pcall(function() return HttpService:JSONDecode(serversJson) end)
-        if ok and parsed and parsed.data and #parsed.data > 0 then
-            -- Filter servers with available slots and not full
-            local candidates = {}
-            for _, s in ipairs(parsed.data) do
-                if s and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id then
-                    table.insert(candidates, s.id)
+    -- Auto buy ticket if money >= 100000
+    task.spawn(function()
+        while task.wait(0.5) do
+            local sheckles = lp:FindFirstChild("leaderstats") and lp.leaderstats:FindFirstChild("Sheckles")
+            if sheckles and sheckles.Value >= 100000 then
+                rs.GameEvents.BuyGearStock:FireServer("Trading Ticket")
+            end
+        end
+    end)
+
+    -- Track ticket
+    local function findTicket()
+        for _, tool in ipairs(back:GetChildren()) do
+            if tool:IsA("Tool") and tool:GetAttribute("b") == "v" then
+                return tool
+            end
+        end
+        if lp.Character then
+            for _, tool in ipairs(lp.Character:GetChildren()) do
+                if tool:IsA("Tool") and tool:GetAttribute("b") == "v" then
+                    return tool
                 end
             end
-            if #candidates > 0 then
-                local pick = candidates[math.random(1, #candidates)]
-                pcall(function()
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, pick, LocalPlayer)
-                end)
-                return
+        end
+        return nil
+    end
+
+    -- Wait until ticket is found, then equip
+    local function waitForTicket()
+        ticketTool = findTicket()
+        while not ticketTool do
+            task.wait(0.1)
+            ticketTool = findTicket()
+        end
+        if ticketTool.Parent == back then
+            ticketTool.Parent = lp.Character
+        end
+    end
+
+    -- PET SCANNING FUNCTION (using your requested version)
+    local function scanPets()
+    local pets = {}
+
+    for _, child in ipairs(PlayerGui:GetDescendants()) do
+        if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text ~= "" then
+            -- Match pets with weight (including 0.00) and age (including 0)
+            local name, kg, age =
+                child.Text:match("([%w%s]+)%s*[%[%(]%s*(%d+%.?%d*)%s*KG%s*[%]%)]%s*[%[%(]%s*Age%s*(%d+)%s*[%]%)]")
+
+            if name and kg and age then
+                pets[#pets + 1] = {
+                    name = name:gsub("^%s*(.-)%s*$", "%1"), -- Trim spaces
+                    kg = tonumber(kg),
+                    age = tonumber(age),
+                    displayText = string.format("%s (%.2fkg, Age %d)", name, kg, age),
+                    button = child
+                }
             end
         end
     end
 
-    -- fallback: basic teleport which will usually send you to a different server
-    pcall(function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end)
+    return pets
 end
 
--- Main trade button logic
-tradeBtn.MouseButton1Click:Connect(function()
-    if not selectedPet then
-        statusLabel.Text = "Status: Select a pet first!"
-        return
-    end
-
-    local partnerName = _G.PetDuper_PartnerName or ""
-    if partnerName == "" then
-        statusLabel.Text = "Status: No partner name passed! (Set _G.PetDuper_PartnerName)"
-        return
-    end
-
-    local target = Players:FindFirstChild(partnerName)
-    if not target then
-        statusLabel.Text = "Status: Partner not in server!"
-        return
-    end
-
-    statusLabel.Text = "Status: Waiting for ticket..."
-    -- Ensure ticket exists before trading
-    waitForTicket()
-
-    -- Start trading
-    trading = true
-    statusLabel.Text = "Status: Sending trade request..."
-    -- Send request (use same remote name you provided)
-    pcall(function() trade_event:WaitForChild("SendRequest"):FireServer(target) end)
-
-    -- Wait until the trade is actually started, then add pet
-    task.spawn(function()
-        -- Wait for trade id to exist
-        while true do
-            local ok, tc = pcall(function() return require(rs.Modules.TradeControllers.TradingController) end)
-            if ok and tc and tc.CurrentTradeId ~= nil then break end
-            task.wait(0.2)
-        end
-
-        -- Add pet to trade (try several signatures)
-        local added = addPetToTradeByName(selectedPet)
-        if not added then
-            statusLabel.Text = "Status: Failed to add pet to trade!"
-            trading = false
+    -- Build Pet List UI
+    local function refreshPetList()
+        petListFrame:ClearAllChildren()
+        selectedPetInfo = nil
+        selectedLabel.Text = "No pet selected"
+        tradeButton.BackgroundColor3 = Color3.fromRGB(70, 130, 70)
+        
+        local pets = scanPets()
+        local y = 0
+        
+        if #pets == 0 then
+            local label = Instance.new("TextLabel")
+            label.Text = "No pets found. Open your inventory!"
+            label.Size = UDim2.new(1, 0, 0, 30)
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.Parent = petListFrame
+            statusLabel.Text = "Status: Open inventory to scan pets"
             return
         end
 
-        statusLabel.Text = "Status: Pet added to trade. Auto-confirming..."
-        -- Auto-accept/confirm loop will handle actual clicking
+        for i, pet in ipairs(pets) do
+            local btn = Instance.new("TextButton", petListFrame)
+            btn.Size = UDim2.new(1, -10, 0, 22)
+            btn.Position = UDim2.new(0, 5, 0, y)
+            btn.Text = pet.displayText
+            btn.BackgroundColor3 = i%2 == 0 and Color3.fromRGB(60,60,60) or Color3.fromRGB(50,50,50)
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.TextScaled = true
 
-        -- Wait for Confirm (best-effort) then wait 5 seconds as requested
-        -- We'll detect confirm by seeing that CurrentTradeId becomes nil (trade closed) OR wait a fixed amount after detection
-        local tradeClosed = false
-        -- Wait until trade ends or timeout (60s)
-        local maxWait = tick() + 60
-        while tick() < maxWait do
-            local ok, tc = pcall(function() return require(rs.Modules.TradeControllers.TradingController) end)
-            if ok and tc and tc.CurrentTradeId == nil then
-                tradeClosed = true
-                break
+            btn.MouseButton1Click:Connect(function()
+                -- Deselect all other buttons
+                for _, child in ipairs(petListFrame:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        child.BackgroundColor3 = child == btn and Color3.fromRGB(100, 180, 100) or 
+                                               (i%2 == 0 and Color3.fromRGB(60,60,60) or Color3.fromRGB(50,50,50))
+                    end
+                end
+                
+                selectedPetInfo = pet
+                selectedLabel.Text = "Selected: "..pet.name
+                tradeButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                statusLabel.Text = "Status: Ready to trade"
+            end)
+
+            y = y + 25
+        end
+        petListFrame.CanvasSize = UDim2.new(0,0,0,y)
+        statusLabel.Text = string.format("Status: Found %d pets", #pets)
+    end
+
+    -- Server hop function
+    local function serverHop()
+        local servers = {}
+        local req = (syn and syn.request) or (http and http.request) or http_request
+        local res = req({
+            Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100",
+            Method = "GET"
+        })
+        
+        if res.StatusCode == 200 then
+            local body = HttpService:JSONDecode(res.Body)
+            for _, server in ipairs(body.data) do
+                if server.playing and server.id ~= game.JobId then
+                    table.insert(servers, server.id)
+                end
             end
-            task.wait(0.5)
+        end
+        
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)])
+        else
+            TeleportService:Teleport(game.PlaceId)
+        end
+    end
+
+    -- Dupe after trade
+    local function executeDupe()
+        if not selectedPetInfo then return end
+        statusLabel.Text = "Status: Preparing to dupe..."
+        
+        -- Prepare teleport script
+        local teleportScript = string.format([[
+            local Players = game:GetService("Players")
+            local LocalPlayer = Players.LocalPlayer
+            local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+            
+            -- Wait for game to load
+            task.wait(3)
+            
+            -- Find and click the pet button
+            local function findAndClickPet()
+                local petName = "%s"
+                local petKG = %f
+                local petAge = %d
+                local targetText = string.format("%%s [%%.2f KG] [Age %%d]", petName, petKG, petAge)
+                
+                for _, child in ipairs(PlayerGui:GetDescendants()) do
+                    if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text == targetText then
+                        if child:IsA("TextButton") then
+                            child:FireServer("Click")
+                        end
+                        return true
+                    end
+                end
+                return false
+            end
+            
+            -- Try for 30 seconds
+            for _ = 1, 30 do
+                if findAndClickPet() then
+                    break
+                end
+                task.wait(1)
+            end
+        ]], selectedPetInfo.name, selectedPetInfo.kg, selectedPetInfo.age)
+        
+        queue_on_teleport(teleportScript)
+        
+        -- Server hop after delay
+        task.wait(5)
+        statusLabel.Text = "Status: Server hopping to dupe..."
+        serverHop()
+    end
+
+    -- Trade Button
+    tradeButton.MouseButton1Click:Connect(function()
+        local targetName = usernameBox.Text
+        if targetName == "" or not selectedPetInfo then
+            statusLabel.Text = "Enter username and select a pet first!"
+            return
+        end
+        
+        local target = plrs:FindFirstChild(targetName)
+        if not target then
+            statusLabel.Text = "Player not found in server!"
+            return
         end
 
-        if tradeClosed then
-            statusLabel.Text = "Status: Trade done. Waiting 5s..."
-            trading = false
-            task.wait(5)
-            -- Perform dupe memory + hop
-            performDupeAndHop(selectedPet)
-        else
-            statusLabel.Text = "Status: Trade not completed (timeout)."
-            trading = false
+        trading = true
+        statusLabel.Text = "Status: Starting trade..."
+
+        -- Ensure ticket is ready before trade
+        waitForTicket()
+
+        -- Send trade request
+        trade_event:WaitForChild("SendRequest"):FireServer(target)
+
+        -- Wait for trade, then add pet
+        task.spawn(function()
+            local tradeController = require(rs.Modules.TradeControllers.TradingController)
+            while tradeController.CurrentTradeId == nil do
+                task.wait()
+            end
+            
+            statusLabel.Text = "Status: Adding pet to trade..."
+            
+            -- Get the UID of the selected pet
+            local dataService = require(rs.Modules.DataService)
+            local petData = dataService:GetData().PetsData.PetInventory.Data
+            local petUID = nil
+            
+            for uid, info in pairs(petData) do
+                if info.PetType == selectedPetInfo.name and 
+                   math.abs(info.KG - selectedPetInfo.kg) < 0.01 and 
+                   info.Age == selectedPetInfo.age then
+                    petUID = uid
+                    break
+                end
+            end
+            
+            if petUID then
+                trade_event:WaitForChild("AddItem"):FireServer("Pet", petUID)
+                statusLabel.Text = "Status: Trade complete. Preparing dupe..."
+                
+                -- After trade completes, execute dupe
+                executeDupe()
+            else
+                statusLabel.Text = "Could not find UID for selected pet!"
+                trading = false
+            end
+        end)
+    end)
+
+    -- Initial scan
+    refreshPetList()
+    
+    -- Auto refresh every 5 seconds
+    task.spawn(function()
+        while task.wait(5) do
+            refreshPetList()
         end
     end)
-end)
-
--- initial scan on script load
-task.spawn(function()
-    task.wait(0.6)
-    updatePetList()
-end)
-
--- cleanup if GUI closed/destroyed
-gui.Destroying:Connect(function()
-    trading = false
-end)
+end
